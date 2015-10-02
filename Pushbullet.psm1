@@ -1,4 +1,5 @@
-﻿
+﻿$APIKey = ""
+
 Function Send-Pushbullet
 {
     <#
@@ -25,7 +26,12 @@ Function Send-Pushbullet
 
         Send a message to a remote user.
     #>
-    param([Parameter(Mandatory=$True)][string]$APIKey=$(throw "APIKey is mandatory, please provide a value."), [Parameter(Mandatory=$True)][string]$Title=$(throw "Title is mandatory, please provide a value."), [string]$Message="", [string]$Link="", [string]$DeviceIden="", [string]$ContactEmail="")
+    param([Parameter(Mandatory=$True)][string]$Title=$(throw "Title is mandatory, please provide a value."), [string]$APIKey=$APIKey, [string]$Message="", [string]$Link="", [string]$DeviceIden="", [string]$ContactEmail="")
+
+    if ($APIKey -eq "")
+    {
+        throw "APIKey is mandatory, please provide a value."
+    }
 
     if($Link -ne "")
     {
@@ -74,7 +80,12 @@ Function Get-PushbulletDevices
 
         Return the iden value for a specific device called 'MyDevice'.
     #>
-    param([Parameter(Mandatory=$True)][string]$APIKey=$(throw "APIKey is mandatory, please provide a value."))
+    param([string]$APIKey=$APIKey)
+
+    if ($APIKey -eq "")
+    {
+        throw "APIKey is mandatory, please provide a value."
+    }
 
     $Creds = New-Object System.Management.Automation.PSCredential ($APIKey, (ConvertTo-SecureString $APIKey -AsPlainText -Force))
     $devices = Invoke-WebRequest -Uri "https://api.pushbullet.com/v2/devices" -Credential $Creds -Method GET
@@ -82,30 +93,57 @@ Function Get-PushbulletDevices
     return $json.devices
 }
 
-Function Get-PushbulletContacts
+function ExtendJSON($base, $ext)
+{
+    $propNames = $($ext | Get-Member -MemberType *Property).Name
+    foreach ($propName in $propNames) {
+        if ($base.PSObject.Properties.Match($propName).Count) {
+            if ($base.$propName.GetType().Name -eq "PSCustomObject")
+            {
+                $base.$propName = ExtendJSON $base.$propName $ext.$propName
+            }
+            else
+            {
+                $base.$propName = $ext.$propName
+            }
+        }
+        else
+        {
+            $base | Add-Member -MemberType NoteProperty -Name $propName -Value $ext.$propName
+        }
+    }
+    return $base
+}
+
+Function Get-PushbulletChats
 {
     <#
     .SYNOPSIS
-        Get-PushbulletContacts will return your list of contacts.
+        Get-PushbulletChats will return your list of chats.
 
     .DESCRIPTION
         This function requires an account at Pushbullet. Register at http://pushbullet.com and obtain your API Key from the account settings section.
 
-        With this module you can see a list of your existing contacts, for use with Send-Pushbullet and the 'ContactEmail' parameter.
+        With this module you can see a list of your existing chats, for use with Send-Pushbullet and the 'ContactEmail' parameter.
    
     .EXAMPLE
-        Get-PushbulletContacts -APIKey "XXXXXX" | Select name,email
+        Get-PushbulletChats -APIKey "XXXXXX"
 
-        Get a table of contact names and emails.
+        Get a table of current chats and contact details.
     #>
-    param([Parameter(Mandatory=$True)][string]$APIKey=$(throw "APIKey is mandatory, please provide a value."))
+    param([string]$APIKey=$APIKey)
+
+    if ($APIKey -eq "")
+    {
+        throw "APIKey is mandatory, please provide a value."
+    }
 
     $Creds = New-Object System.Management.Automation.PSCredential ($APIKey, (ConvertTo-SecureString $APIKey -AsPlainText -Force))
-    $devices = Invoke-WebRequest -Uri "https://api.pushbullet.com/v2/contacts" -Credential $Creds -Method GET
-    $json = $devices.content | ConvertFrom-Json
-    return $json.contacts
+    $chats = Invoke-WebRequest -Uri "https://api.pushbullet.com/v2/chats" -Credential $Creds -Method GET
+	
+	return ($chats | ConvertFrom-Json).chats
 }
 
 Export-ModuleMember -Function Send-Pushbullet
 Export-ModuleMember -Function Get-PushbulletDevices
-Export-ModuleMember -Function Get-PushbulletContacts
+Export-ModuleMember -Function Get-PushbulletChats
